@@ -1,0 +1,42 @@
+name: Publish to PyPI
+
+on:
+  release:
+    types: [created]
+  workflow_dispatch:
+
+jobs:
+  publish:
+    name: Publish Package
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          lfs: true
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+
+      - name: Install build dependencies
+        run: |
+          python -m pip install --upgrade pip build twine
+
+      - name: Check the model artifact is a real file
+        run: |
+          size=$(stat -c%s ocrsieve/artifacts/model.onnx)
+          echo "model.onnx: $size bytes"
+          test "$size" -gt 1000000 || {
+            echo "model.onnx looks like an LFS pointer, not the model"; exit 1;
+          }
+
+      - name: Build and publish
+        env:
+          TWINE_USERNAME: __token__
+          TWINE_PASSWORD: ${{ secrets.PYPI_API_TOKEN }}
+        run: |
+          python -m build
+          twine check dist/*
+          twine upload --repository-url https://upload.pypi.org/legacy/ dist/*
